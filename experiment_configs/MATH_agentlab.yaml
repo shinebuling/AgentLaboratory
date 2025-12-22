@@ -1,70 +1,82 @@
-# If you want to have user input or be a human-in-the-loop
+# 如果你想要用户输入或人在回路中交互
 copilot-mode: True
 
-# Here is the research prompt. If num-papers-to-write > 1, you can treat this as a "research direction" otherwise it can be *very* specific and can be treated as a full research idea
-research-topic: "Your goal is to design reasoning and prompt engineering techniques to maximize accuracy on the entire 500 test questions of MATH500 benchmark. Your idea should be very novel."
+# 这是研究提示。如果 num-papers-to-write > 1，可以将其视为"研究方向"，否则可以非常具体，作为完整的研究想法
+research-topic: "你的目标是探索如何将3DGS的致密化操作用强化学习的方式代替，一个可选方向是用VGGT作为backbone提取三维特征"
 
-# Here you can put your OpenAI API key--if you don't have one or OpenAI doesn't work for you, you can also instead use `deepseek-api-key`
-api-key: "OPENAI-API-KEY-HERE"
-# or deepseek-api-key: "DEEPSEEK-API-KEY-HERE"
-# Agent Laboratory backend
-llm-backend: "o3-mini"
-# Literature review backend
-lit-review-backend: "o3-mini"
+# 这里可以放置你的OpenAI API密钥--如果你没有或OpenAI不可用，也可以使用`deepseek-api-key`或`gitee-api-key`
+# api-key: "这里放置OPENAI-API-密钥"
+# deepseek-api-key: "sk-5fb54bbb76cc40a4bc9fb821bd220e02"
 
-# Base language
-language: "English"
+# Gitee AI平台配置（兼容OpenAI接口）
+gitee-api-key: "1NJHGJ7C6C3DL4HKVFQQ655TX0ARTHRUYGTW1TWQ"
+gitee-base-url: "https://ai.gitee.com/v1"
 
-# Number of arxiv papers to lit review
+# Agent Laboratory 后端模型（可选：deepseek-chat, DeepSeek-V3等）
+llm-backend: "DeepSeek-V3"
+# 文献综述后端模型
+lit-review-backend: "DeepSeek-V3"
+
+# 基础语言
+language: "Chinese"
+
+# 要进行文献综述的arxiv论文数量
 num-papers-lit-review: 5
-# Total number of papers to write in sequence
+# 顺序生成的论文总数
 num-papers-to-write: 1
-# Do you want to run multiple agent labs in parallel?
+# 是否想要并行运行多个实验室？
 parallel-labs: False
 
-# Total mle-solver steps per lab
+# 每个实验室的mle-solver最大步骤数
 mlesolver-max-steps: 3
-# Total paper-solver steps per lab
+# 每个实验室的paper-solver最大步骤数
 papersolver-max-steps: 1
-# The lab index for this lab (used for parallel runs)
+# 该实验室的索引（用于并行运行）
 lab-index: 1
-# If you want to load an existing save
+# 是否要加载现有的保存
 load-existing: False
-# If fail, run exception?
+# 如果失败，是否运行异常？
 except-if-fail: False
-# Compile latex into PDFs during paper-solver
+# 在paper-solver期间是否将latex编译为PDF
 compile-latex: False
 
-# Task notes
+# 任务说明
 task-notes:
   plan-formulation:
-    - 'You should come up with a plan for only ONE experiment aimed at maximizing performance on the test set of MATH using prompting techniques.'
-    - 'The baseline performance of gpt-4o-mini on MATH-500 is 70.2%'
-    - 'Please use gpt-4o-mini for your experiments'
-    - 'You must evaluate on the entire 500 test questions of MATH'
-    - 'Your plan should be a novel prompting technique'
-    - 'Your evalution shound aim to get state-of-the-art performance on the MATH dataset using prompt a novel prompting idea'
-    - "DO NOT PLAN FOR TOO LONG. Submit your plan soon."
+    - '你应该制定一个实验计划，目标是用强化学习替代3D高斯散射(3DGS)的致密化操作'
+    - '原始3DGS使用启发式规则（如梯度阈值）来决定何时分裂、克隆或删除高斯点'
+    - '你的目标是设计一个强化学习智能体来学习更优的致密化策略'
+    - '可选方向：使用VGGT作为backbone提取场景的三维特征来指导强化学习决策'
+    - '你的实验计划应该包括：状态空间设计、动作空间定义、奖励函数设计、训练策略'
+    - '需要考虑的评估指标：渲染质量(PSNR/SSIM)、高斯点数量、训练收敛速度'
+    - "不要规划太久。尽快提交你的计划。"
   data-preparation:
-    - 'Please use gpt-4o-mini for your experiments'
-    - 'You must evaluate on the entire 500 test questions of MATH'
-    - 'Here is a sample code you can use to load MATH\nfrom datasets import load_dataset\nMATH_test_set = load_dataset("HuggingFaceH4/MATH-500")["test"]'
+    - '准备用于3DGS训练的多视角图像数据集（如NeRF Synthetic、Mip-NeRF360、Tanks&Temples等）'
+    - '如果使用VGGT，需要准备相应的预训练模型权重'
+    - '示例代码：\nimport torch\nfrom scene import Scene\nfrom gaussian_renderer import render\n\n# 加载场景数据\nscene = Scene(dataset_path, gaussians, load_iteration=None)\n# 获取训练视角\nviewpoint_stack = scene.getTrainCameras().copy()'
   running-experiments:
-    - "For all strings you instantiate you must use triple quotes (''')"
-    - 'Please use gpt-4o-mini for your experiments'
-    - 'Do not try to obtain baseline accuracy or any comparison points. The baseline performance of gpt-4o-mini on MATH-500 is 70.2%'
-    - 'You can just use the query_gpt4omini(prompt=prompt, system=system_prompt) to prompt gpt-4o-mini. You can also access temperature by setting the temperature value query_gpt4omini(prompt=prompt, system=system_prompt, temperature=0.5) for example.'
-    - 'You must evaluate on the entire 500 test questions of MATH-500'
-    - "You should come up with a plan for ONE experiment aimed at maximizing performance on MATH using prompting techniques"
-    - "Make sure to use is_equiv() to evaluate if two answers are equivalent."
-    - 'Use the following code to inference gpt-4o-mini\nresponse = query_gpt4omini(prompt=prompt, system=system_prompt)'
-    - "Your code should parallelize inference. Make sure to write parallelized code."
-    - "YOU MUST MAKE YOUR CODE PARALLELIZED."
-    - "Create very thoughtful figures, that would make a good research study."
-    - 'You have access to only gpt-4o-mini'
-    - 'Here is some sample code to evaluate on MATH:\nimport multiprocessing\nimport concurrent.futures\nfrom datasets import load_dataset\n\ndef process_example(example):\n    problem = example["problem"]\n    solution = example["solution"]\n    true_answer = remove_boxed(last_boxed_only_string(solution))\n    prompt = f"""Solve the following math problem and provide your final answer enclosed in a LaTeX \\boxed{{...}} command.\n\nProblem: {problem}\n\nFinal Answer:"""\n    response = query_gpt4omini(prompt=prompt, system="You are a skilled mathematician.")\n    llm_answer = remove_boxed(last_boxed_only_string(response))\n    correct = is_equiv(llm_answer, true_answer)\n    return llm_answer, true_answer, correct\n\ndef main():\n    math_test_set = load_dataset("HuggingFaceH4/MATH-500")["test"]\n    total, correct_count = 0, 0\n    max_workers = multiprocessing.cpu_count()\n    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:\n        futures = [executor.submit(process_example, example) for example in math_test_set]\n        for future in concurrent.futures.as_completed(futures):\n            try: llm_answer, true_answer, correct = future.result()\n            except Exception: continue\n            total += 1\n            if correct: correct_count += 1\n            print(f"Step: {total}, LLM answer: {llm_answer}, True answer: {true_answer}, Accuracy: {(correct_count / total) * 100:.2f}%")\n    print(f"Complete, final accuracy: {(correct_count / total) * 100:.2f}%")\n\nif __name__ == "__main__":\n    main()'
-    - 'Generate figures with very colorful and artistic design'
+    - '实现强化学习环境，状态包括：当前高斯点的属性(位置、协方差、不透明度)、梯度统计信息、局部场景特征'
+    - '定义动作空间：对每个高斯点决定是否分裂、克隆、删除或保持不变'
+    - '设计奖励函数，平衡渲染质量和效率：reward = α * PSNR - β * num_gaussians - γ * training_time'
+    - '使用PPO或SAC等成熟的强化学习算法进行训练'
+    - '如果使用VGGT：\nimport vggt  # 假设VGGT库\nfeature_extractor = vggt.VGGT(pretrained=True)\nscene_features = feature_extractor(multi_view_images)'
+    - '基线对比：实现原始3DGS的启发式致密化方法作为对比'
+    - '在多个数据集上评估：至少包括一个合成数据集(NeRF Synthetic)和一个真实数据集(Mip-NeRF360)'
+    - '记录训练曲线：PSNR、SSIM、LPIPS、高斯点数量随训练步数的变化'
+    - '进行消融实验：测试不同奖励权重、不同状态表示、有无VGGT特征提取的影响'
+    - '可视化结果：渲染图像对比、高斯点分布3D可视化、致密化决策热力图'
+    - '确保实验可复现：固定随机种子、保存所有超参数配置'
+    - '生成高质量的定性和定量结果图表，展示强化学习方法的优势'
   results-interpretation:
-    - 'The baseline performance of gpt-4o-mini on MATH-500 is 70.2%'
+    - '对比强化学习方法与原始启发式方法在渲染质量(PSNR/SSIM/LPIPS)上的差异'
+    - '分析高斯点数量和训练效率的权衡：强化学习是否能用更少的点达到相同质量？'
+    - '讨论VGGT特征提取的作用：是否显著提升了致密化决策的质量？'
+    - '分析失败案例：哪些场景类型强化学习方法表现不佳？可能的原因是什么？'
+    - '总结强化学习方法的优势和局限性，以及未来改进方向'
   report-writing:
-    - 'The baseline performance of gpt-4o-mini on MATH-500 is 70.2%'
+    - '论文结构应包括：摘要、引言(3DGS背景+强化学习动机)、相关工作、方法、实验、结果、讨论、结论'
+    - '方法部分详细描述：状态空间、动作空间、奖励函数、训练算法、网络架构(如使用VGGT)'
+    - '实验部分展示：定量对比表格、定性渲染结果对比、消融实验、训练曲线'
+    - '讨论部分分析：为什么强化学习能改进致密化？学到的策略有何特点？计算开销如何？'
+    - '强调创新点：首次将强化学习应用于3DGS致密化、VGGT特征提取的应用、性能改进'
+    - '提供开源代码和预训练模型的链接（如适用）'

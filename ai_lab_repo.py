@@ -675,6 +675,9 @@ def parse_yaml(yaml_file_loc):
     if 'research-topic' in agentlab_data: parser.research_topic = agentlab_data["research-topic"]
     if 'api-key' in agentlab_data: parser.api_key = agentlab_data["api-key"]
     if 'deepseek-api-key' in agentlab_data: parser.deepseek_api_key = agentlab_data["deepseek-api-key"]
+    if 'gitee-api-key' in agentlab_data: parser.gitee_api_key = agentlab_data["gitee-api-key"]
+    if 'gitee-base-url' in agentlab_data: parser.gitee_base_url = agentlab_data["gitee-base-url"]
+    else: parser.gitee_base_url = "https://ai.gitee.com/v1"
     if 'compile-latex' in agentlab_data: parser.compile_latex = agentlab_data["compile-latex"]
     else: parser.compile_latex = True
     if 'llm-backend' in agentlab_data: parser.llm_backend = agentlab_data["llm-backend"]
@@ -741,14 +744,22 @@ if __name__ == "__main__":
 
     api_key = (os.getenv('OPENAI_API_KEY') or args.api_key) if (hasattr(args, 'api_key') or os.getenv('OPENAI_API_KEY')) else None
     deepseek_api_key = (os.getenv('DEEPSEEK_API_KEY') or args.deepseek_api_key) if (hasattr(args, 'deepseek_api_key') or os.getenv('DEEPSEEK_API_KEY')) else None
+    gitee_api_key = (os.getenv('GITEE_API_KEY') or args.gitee_api_key) if (hasattr(args, 'gitee_api_key') or os.getenv('GITEE_API_KEY')) else None
+    gitee_base_url = args.gitee_base_url if hasattr(args, 'gitee_base_url') else "https://ai.gitee.com/v1"
+    
     if api_key is not None and os.getenv('OPENAI_API_KEY') is None: os.environ["OPENAI_API_KEY"] = args.api_key
     if deepseek_api_key is not None and os.getenv('DEEPSEEK_API_KEY') is None: os.environ["DEEPSEEK_API_KEY"] = args.deepseek_api_key
+    if gitee_api_key is not None:
+        if os.getenv('GITEE_API_KEY') is None: os.environ["GITEE_API_KEY"] = gitee_api_key
+        if os.getenv('GITEE_BASE_URL') is None: os.environ["GITEE_BASE_URL"] = gitee_base_url
 
-    if not api_key and not deepseek_api_key: raise ValueError("API key must be provided via --api-key / -deepseek-api-key or the OPENAI_API_KEY / DEEPSEEK_API_KEY environment variable.")
+    if not api_key and not deepseek_api_key and not gitee_api_key: raise ValueError("API key must be provided via --api-key / --deepseek-api-key / --gitee-api-key or the OPENAI_API_KEY / DEEPSEEK_API_KEY / GITEE_API_KEY environment variable.")
     
-    # Use deepseek_api_key if api_key is not set
+    # Use deepseek_api_key or gitee_api_key if api_key is not set
     if api_key is None and deepseek_api_key is not None:
         api_key = deepseek_api_key
+    elif api_key is None and gitee_api_key is not None:
+        api_key = gitee_api_key
 
     if human_mode or args.research_topic is None: research_topic = input("Please name an experiment idea for AgentLaboratory to perform: ")
     else: research_topic = args.research_topic

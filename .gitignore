@@ -1,4 +1,6 @@
 venv*
+.venv/
+.venv*
 .idea*
 tst*
 state*
@@ -9,8 +11,26 @@ papers*
 hf*
 junk/data/*
 research_dir/*
+MATH_research_dir/*
 .DS_Store
 state_saves/*
 __pycache__/*
 Figure*.png
 testrun.py
+
+# Data folders
+*_data/
+*_processed/
+uploads/
+*.json
+
+# Python cache
+*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/

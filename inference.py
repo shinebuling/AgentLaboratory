@@ -20,6 +20,7 @@ def curr_cost_est():
         "o1-mini": 3.00 / 1000000,
         "claude-3-5-sonnet": 3.00 / 1000000,
         "deepseek-chat": 1.00 / 1000000,
+        "DeepSeek-V3": 1.00 / 1000000,
         "o1": 15.00 / 1000000,
         "o3-mini": 1.10 / 1000000,
     }
@@ -30,6 +31,7 @@ def curr_cost_est():
         "o1-mini": 12.00 / 1000000,
         "claude-3-5-sonnet": 12.00 / 1000000,
         "deepseek-chat": 5.00 / 1000000,
+        "DeepSeek-V3": 5.00 / 1000000,
         "o1": 60.00 / 1000000,
         "o3-mini": 4.40 / 1000000,
     }
@@ -147,6 +149,41 @@ def query_model(model_str, prompt, system_prompt, openai_api_key=None, gemini_ap
                     else:
                         completion = deepseek_client.chat.completions.create(
                             model="deepseek-chat",
+                            messages=messages,
+                            temperature=temp)
+                answer = completion.choices[0].message.content
+            elif model_str == "DeepSeek-V3" or model_str == "deepseek-v3":
+                model_str = "DeepSeek-V3"
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}]
+                if version == "0.28":
+                    raise Exception("Please upgrade your OpenAI version to use Gitee AI client")
+                else:
+                    # 优先使用Gitee AI配置，否则回退到DeepSeek官方API
+                    gitee_api_key = os.getenv('GITEE_API_KEY')
+                    gitee_base_url = os.getenv('GITEE_BASE_URL', 'https://ai.gitee.com/v1')
+                    
+                    if gitee_api_key:
+                        gitee_client = OpenAI(
+                            api_key=gitee_api_key,
+                            base_url=gitee_base_url,
+                            default_headers={"X-Failover-Enabled": "true"}
+                        )
+                    else:
+                        # 回退到DeepSeek官方API
+                        gitee_client = OpenAI(
+                            api_key=os.getenv('DEEPSEEK_API_KEY'),
+                            base_url="https://api.deepseek.com/v1"
+                        )
+                    
+                    if temp is None:
+                        completion = gitee_client.chat.completions.create(
+                            model="DeepSeek-V3",
+                            messages=messages)
+                    else:
+                        completion = gitee_client.chat.completions.create(
+                            model="DeepSeek-V3",
                             messages=messages,
                             temperature=temp)
                 answer = completion.choices[0].message.content
