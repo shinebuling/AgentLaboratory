@@ -12,6 +12,7 @@ hf*
 junk/data/*
 research_dir/*
 MATH_research_dir/*
+experiments/
 .DS_Store
 state_saves/*
 __pycache__/*
@@ -19,10 +20,15 @@ Figure*.png
 testrun.py
 
 # Data folders
+data/
 *_data/
 *_processed/
 uploads/
 *.json
+
+# Experiment results
+experiments/
+state_saves/
 
 # Python cache
 *.pyc

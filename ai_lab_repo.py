@@ -4,10 +4,10 @@ from app import *
 from agents import *
 from copy import copy
 from pathlib import Path
-from datetime import date
+from datetime import date, datetime
 from common_imports import *
 from mlesolver import MLESolver
-import argparse, pickle, yaml
+import argparse, pickle, yaml, re
 
 GLOBAL_AGENTRXIV = None
 DEFAULT_LLM_BACKBONE = "o3-mini"
@@ -97,6 +97,39 @@ class LaboratoryWorkflow:
         self.professor = ProfessorAgent(model=self.model_backbone, notes=self.notes, max_steps=self.max_steps, openai_api_key=self.openai_api_key)
         self.ml_engineer = MLEngineerAgent(model=self.model_backbone, notes=self.notes, max_steps=self.max_steps, openai_api_key=self.openai_api_key)
         self.sw_engineer = SWEngineerAgent(model=self.model_backbone, notes=self.notes, max_steps=self.max_steps, openai_api_key=self.openai_api_key)
+        
+        # 如果lab_dir未指定，创建基于时间戳的实验目录
+        if self.lab_dir is None:
+            self.lab_dir = self.create_experiment_directory()
+        
+        # 确保所有子目录存在
+        self._ensure_directories_exist()
+
+    def create_experiment_directory(self):
+        """创建基于时间戳的实验目录"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # 清理研究主题，创建简短的目录名
+        topic_short = re.sub(r'[^\w\s-]', '', self.research_topic)[:50]
+        topic_short = re.sub(r'[-\s]+', '_', topic_short).strip('_')
+        
+        experiment_root = f"experiments/{timestamp}_{topic_short}"
+        return experiment_root
+    
+    def _ensure_directories_exist(self):
+        """确保所有必要的目录存在"""
+        directories = [
+            self.lab_dir,
+            f"{self.lab_dir}/data",
+            f"{self.lab_dir}/outputs",
+            f"{self.lab_dir}/logs",
+            f"{self.lab_dir}/src",
+            f"{self.lab_dir}/reports",
+            f"{self.lab_dir}/tex",
+        ]
+        for directory in directories:
+            os.makedirs(directory, exist_ok=True)
+        
+        print(f"✓ 实验目录已创建: {self.lab_dir}")
 
 
     def set_model(self, model):
@@ -109,8 +142,11 @@ class LaboratoryWorkflow:
         @param phase: (str) phase string
         @return: None
         """
-        with open(f"state_saves/Paper{self.paper_index}.pkl", "wb") as f:
+        state_file = f"{self.lab_dir}/logs/state_{phase.replace(' ', '_')}.pkl"
+        with open(state_file, "wb") as f:
             pickle.dump(self, f)
+        if self.verbose:
+            print(f"✓ 已保存状态: {state_file}")
 
     def set_agent_attr(self, attr, obj):
         """
@@ -266,8 +302,8 @@ class LaboratoryWorkflow:
             if retry: return retry
         self.set_agent_attr("report", report)
         readme = self.professor.generate_readme()
-        save_to_file(f"./{self.lab_dir}", "readme.md", readme)
-        save_to_file(f"./{self.lab_dir}", "report.txt", report)
+        save_to_file(f"{self.lab_dir}/reports", "readme.md", readme)
+        save_to_file(f"{self.lab_dir}/reports", "report.txt", report)
         self.reset_agents()
         return False
 
@@ -332,8 +368,8 @@ class LaboratoryWorkflow:
         if self.human_in_loop_flag["running experiments"]:
             retry = self.human_in_loop("data preparation", code)
             if retry: return retry
-        save_to_file(f"./{self.lab_dir}/src", "run_experiments.py", code)
-        save_to_file(f"./{self.lab_dir}/src", "experiment_output.log", exp_results)
+        save_to_file(f"{self.lab_dir}/src", "run_experiments.py", code)
+        save_to_file(f"{self.lab_dir}/outputs", "experiment_output.log", exp_results)
         self.set_agent_attr("results_code", code)
         self.set_agent_attr("exp_results", exp_results)
         # reset agent state
@@ -375,7 +411,7 @@ class LaboratoryWorkflow:
                     if self.human_in_loop_flag["data preparation"]:
                         retry = self.human_in_loop("data preparation", final_code)
                         if retry: return retry
-                    save_to_file(f"./{self.lab_dir}/src", "load_data.py", final_code)
+                    save_to_file(f"{self.lab_dir}/src", "load_data.py", final_code)
                     self.set_agent_attr("dataset_code", final_code)
                     # reset agent state
                     self.reset_agents()
@@ -845,18 +881,14 @@ if __name__ == "__main__":
         # remove previous files
         remove_figures()
         if agentRxiv: GLOBAL_AGENTRXIV = AgentRxiv(lab_index)
-        if not agentRxiv:
-            remove_directory(f"{RESEARCH_DIR_PATH}")
-            os.mkdir(os.path.join(".", f"{RESEARCH_DIR_PATH}"))
-        # make src and research directory
-        if not os.path.exists("state_saves"): os.mkdir(os.path.join(".", "state_saves"))
+        
+        # 创建experiments根目录
+        os.makedirs("experiments", exist_ok=True)
+        
         time_str = str()
         time_now = time.time()
         for _paper_index in range(num_papers_to_write):
-            lab_direct = f"{RESEARCH_DIR_PATH}/research_dir_{_paper_index}_lab_{lab_index}"
-            os.mkdir(os.path.join(".", lab_direct))
-            os.mkdir(os.path.join(f"./{lab_direct}", "src"))
-            os.mkdir(os.path.join(f"./{lab_direct}", "tex"))
+            # 不再预先创建目录，让LaboratoryWorkflow自动创建
             lab = LaboratoryWorkflow(
                 research_topic=research_topic,
                 notes=task_notes_LLM,
@@ -871,11 +903,12 @@ if __name__ == "__main__":
                 except_if_fail=except_if_fail,
                 agentRxiv=False,
                 lab_index=lab_index,
-                lab_dir=f"./{lab_direct}"
+                lab_dir=None  # 设为None，让类自动创建时间戳目录
             )
             lab.perform_research()
             time_str += str(time.time() - time_now) + " | "
-            with open(f"agent_times_{lab_index}.txt", "w") as f:
+            # 保存时间记录到实验目录
+            with open(f"{lab.lab_dir}/logs/timing.txt", "w") as f:
                 f.write(time_str)
             time_now = time.time()
 
