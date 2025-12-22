@@ -4,7 +4,10 @@ import time
 import tiktoken, openai
 import subprocess, string
 from openai import OpenAI
-import google.generativeai as genai
+try:
+    from google import genai
+except ImportError:
+    genai = None
 from huggingface_hub import InferenceClient
 
 

@@ -664,7 +664,7 @@ def parse_arguments():
 
 
 def parse_yaml(yaml_file_loc):
-    with open(yaml_file_loc, 'r') as file: agentlab_data = yaml.safe_load(file)
+    with open(yaml_file_loc, 'r', encoding='utf-8') as file: agentlab_data = yaml.safe_load(file)
     class YamlDataHolder:
         def __init__(self): pass
     parser = YamlDataHolder()
@@ -745,6 +745,10 @@ if __name__ == "__main__":
     if deepseek_api_key is not None and os.getenv('DEEPSEEK_API_KEY') is None: os.environ["DEEPSEEK_API_KEY"] = args.deepseek_api_key
 
     if not api_key and not deepseek_api_key: raise ValueError("API key must be provided via --api-key / -deepseek-api-key or the OPENAI_API_KEY / DEEPSEEK_API_KEY environment variable.")
+    
+    # Use deepseek_api_key if api_key is not set
+    if api_key is None and deepseek_api_key is not None:
+        api_key = deepseek_api_key
 
     if human_mode or args.research_topic is None: research_topic = input("Please name an experiment idea for AgentLaboratory to perform: ")
     else: research_topic = args.research_topic

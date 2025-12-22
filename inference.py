@@ -2,7 +2,10 @@ import openai
 import time, tiktoken
 from openai import OpenAI
 import os, anthropic, json
-import google.generativeai as genai
+try:
+    from google import genai
+except ImportError:
+    genai = None
 
 TOKENS_IN = dict()
 TOKENS_OUT = dict()
