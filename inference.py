@@ -50,6 +50,40 @@ def query_model(model_str, prompt, system_prompt, openai_api_key=None, gemini_ap
         os.environ["ANTHROPIC_API_KEY"] = anthropic_api_key
     if gemini_api_key is not None:
         os.environ["GEMINI_API_KEY"] = gemini_api_key
+    
+    # Token限制检查和截断（针对DeepSeek-V3的32K上下文限制）
+    if model_str in ["DeepSeek-V3", "deepseek-v3", "deepseek-chat"]:
+        try:
+            # 使用cl100k_base编码器（与GPT-4相同）估算token数
+            enc = tiktoken.get_encoding("cl100k_base")
+            prompt_tokens = len(enc.encode(prompt))
+            system_tokens = len(enc.encode(system_prompt))
+            total_tokens = prompt_tokens + system_tokens
+            
+            # DeepSeek-V3最大上下文32768，保留4000 tokens给输出和安全余量
+            max_input_tokens = 28000
+            
+            if total_tokens > max_input_tokens:
+                print(f"⚠️ 警告: 输入超过限制 ({total_tokens} > {max_input_tokens} tokens)，正在截断...")
+                # 优先截断prompt，保留system_prompt完整
+                available_for_prompt = max_input_tokens - system_tokens
+                if available_for_prompt > 0:
+                    # 截断prompt到可用长度
+                    prompt_tokens_list = enc.encode(prompt)
+                    truncated_tokens = prompt_tokens_list[:available_for_prompt]
+                    prompt = enc.decode(truncated_tokens)
+                    print(f"✓ 已截断prompt: {prompt_tokens} -> {len(truncated_tokens)} tokens")
+                else:
+                    # 如果system_prompt本身就太长，也需要截断
+                    print(f"⚠️ System prompt过长，同时截断system和prompt")
+                    half_tokens = max_input_tokens // 2
+                    system_tokens_list = enc.encode(system_prompt)
+                    prompt_tokens_list = enc.encode(prompt)
+                    system_prompt = enc.decode(system_tokens_list[:half_tokens])
+                    prompt = enc.decode(prompt_tokens_list[:half_tokens])
+        except Exception as e:
+            print(f"⚠️ Token截断时出错: {e}，继续执行...")
+    
     for _ in range(tries):
         try:
             if model_str == "gpt-4o-mini" or model_str == "gpt4omini" or model_str == "gpt-4omini" or model_str == "gpt4o-mini":
@@ -230,8 +264,9 @@ def query_model(model_str, prompt, system_prompt, openai_api_key=None, gemini_ap
             try:
                 if model_str in ["o1-preview", "o1-mini", "claude-3.5-sonnet", "o1", "o3-mini"]:
                     encoding = tiktoken.encoding_for_model("gpt-4o")
-                elif model_str in ["deepseek-chat"]:
-                    encoding = tiktoken.encoding_for_model("cl100k_base")
+                elif model_str in ["deepseek-chat", "DeepSeek-V3", "deepseek-v3"]:
+                    # DeepSeek模型使用cl100k_base编码器
+                    encoding = tiktoken.get_encoding("cl100k_base")
                 else:
                     encoding = tiktoken.encoding_for_model(model_str)
                 if model_str not in TOKENS_IN:
