@@ -53,7 +53,7 @@ def query_model(model_str, prompt, system_prompt, openai_api_key=None, gemini_ap
     if gemini_api_key is not None:
         os.environ["GEMINI_API_KEY"] = gemini_api_key
     
-    # Token限制检查和截断（针对DeepSeek-V3的32K上下文限制）
+    # Token限制检查和截断（针对DeepSeek模型的上下文限制）
     if model_str in ["DeepSeek-V3", "deepseek-v3", "deepseek-chat", "DeepSeek-R1", "deepseek-r1"]:
         try:
             # 使用cl100k_base编码器（与GPT-4相同）估算token数
@@ -62,8 +62,8 @@ def query_model(model_str, prompt, system_prompt, openai_api_key=None, gemini_ap
             system_tokens = len(enc.encode(system_prompt))
             total_tokens = prompt_tokens + system_tokens
             
-            # DeepSeek-V3和R1最大上下文64K，保留4000 tokens给输出和安全余量
-            max_input_tokens = 60000 if model_str in ["DeepSeek-R1", "deepseek-r1"] else 28000
+            # DeepSeek-R1在Gitee AI上是32K上下文，DeepSeek-V3也是32K，保留4000 tokens给输出和安全余量
+            max_input_tokens = 28000
             
             if total_tokens > max_input_tokens:
                 print(f"⚠️ 警告: 输入超过限制 ({total_tokens} > {max_input_tokens} tokens)，正在截断...")
