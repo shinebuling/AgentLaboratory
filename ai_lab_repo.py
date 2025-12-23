@@ -8,6 +8,7 @@ from common_imports import *
 from datetime import date, datetime
 from mlesolver import MLESolver
 from logger_manager import AgentLabLogger, set_logger
+from i18n_messages import I18nManager
 import argparse, pickle, yaml, re
 
 GLOBAL_AGENTRXIV = None
@@ -18,7 +19,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 class LaboratoryWorkflow:
-    def __init__(self, research_topic, openai_api_key, max_steps=100, num_papers_lit_review=5, agent_model_backbone=f"{DEFAULT_LLM_BACKBONE}", notes=list(), human_in_loop_flag=None, compile_pdf=True, mlesolver_max_steps=3, papersolver_max_steps=5, paper_index=0, except_if_fail=False, parallelized=False, lab_dir=None, lab_index=0, agentRxiv=False, agentrxiv_papers=5):
+    def __init__(self, research_topic, openai_api_key, max_steps=100, num_papers_lit_review=5, agent_model_backbone=f"{DEFAULT_LLM_BACKBONE}", notes=list(), human_in_loop_flag=None, compile_pdf=True, mlesolver_max_steps=3, papersolver_max_steps=5, paper_index=0, except_if_fail=False, parallelized=False, lab_dir=None, lab_index=0, agentRxiv=False, agentrxiv_papers=5, language="English"):
         """
         Initialize laboratory workflow
         @param research_topic: (str) description of research idea to explore
@@ -26,6 +27,7 @@ class LaboratoryWorkflow:
         @param num_papers_lit_review: (int) number of papers to include in the lit review
         @param agent_model_backbone: (str or dict) model backbone to use for agents
         @param notes: (list) notes for agent to follow during tasks
+        @param language: (str) language for report and communication
         """
         self.agentRxiv = agentRxiv
         self.max_prev_papers = 10
@@ -41,6 +43,7 @@ class LaboratoryWorkflow:
         self.research_topic = research_topic
         self.model_backbone = agent_model_backbone
         self.num_papers_lit_review = num_papers_lit_review
+        self.language = language
 
         self.print_cost = True
         self.review_override = True # should review be overridden?
@@ -106,8 +109,13 @@ class LaboratoryWorkflow:
         # 确保所有子目录存在
         self._ensure_directories_exist()
         
+        # 初始化国际化管理器
+        lang_code = 'zh_CN' if self.language in ['zh_CN', 'Chinese', 'chinese', '中文'] else 'en_US'
+        self.i18n = I18nManager(language=lang_code)
+        
         # 初始化日志系统
         self.logger = AgentLabLogger(log_dir=f"{self.lab_dir}/logs")
+        self.logger.i18n = self.i18n  # 传递i18n实例给logger
         set_logger(self.logger)  # 设置全局日志实例
         self.logger.info(f"✓ 日志系统已初始化")
 
@@ -919,7 +927,8 @@ if __name__ == "__main__":
                 except_if_fail=except_if_fail,
                 agentRxiv=False,
                 lab_index=lab_index,
-                lab_dir=None  # 设为None，让类自动创建时间戳目录
+                lab_dir=None,  # 设为None，让类自动创建时间戳目录
+                language=args.language  # 传递语言参数
             )
             lab.perform_research()
             time_str += str(time.time() - time_now) + " | "

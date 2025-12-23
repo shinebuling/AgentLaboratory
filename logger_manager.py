@@ -175,11 +175,17 @@ class AgentLabLogger:
         self.current_phase = phase_name
         self.phase_start_time = datetime.now()
         
-        separator = "*" * 50
-        msg = f"\n{separator}\n开始阶段: {phase_name}\n{separator}"
+        # 如果有i18n实例，使用国际化格式
+        if hasattr(self, 'i18n'):
+            msg = self.i18n.format_phase_header(phase_name)
+            log_msg = f"开始: {self.i18n.get(phase_name, phase_name)}"
+        else:
+            separator = "*" * 50
+            msg = f"\n{separator}\n开始阶段: {phase_name}\n{separator}"
+            log_msg = f"开始: {phase_name}"
         
         self.full_logger.info(msg)
-        self.phase_logger.info(f"开始: {phase_name}")
+        self.phase_logger.info(log_msg)
     
     def log_subtask_start(self, subtask_name, lab_index=None, paper_index=None):
         """
@@ -188,15 +194,21 @@ class AgentLabLogger:
         @param lab_index: 实验室索引（可选）
         @param paper_index: 论文索引（可选）
         """
-        separator = "&" * 30
-        
-        if lab_index is not None and paper_index is not None:
-            msg = f"\n{separator}\n[实验室 #{lab_index} 论文 #{paper_index}] 开始子任务: {subtask_name}\n{separator}"
+        # 如果有i18n实例，使用国际化格式
+        if hasattr(self, 'i18n'):
+            msg = self.i18n.format_subtask_header(subtask_name, lab_index, paper_index)
+            translated = self.i18n.get(subtask_name, subtask_name)
+            log_msg = f"  → 子任务: {translated}"
         else:
-            msg = f"\n{separator}\n开始子任务: {subtask_name}\n{separator}"
+            separator = "&" * 30
+            if lab_index is not None and paper_index is not None:
+                msg = f"\n{separator}\n[实验室 #{lab_index} 论文 #{paper_index}] 开始子任务: {subtask_name}\n{separator}"
+            else:
+                msg = f"\n{separator}\n开始子任务: {subtask_name}\n{separator}"
+            log_msg = f"  → 子任务: {subtask_name}"
         
         self.full_logger.info(msg)
-        self.phase_logger.info(f"  → 子任务: {subtask_name}")
+        self.phase_logger.info(log_msg)
     
     def log_phase_end(self, phase_name, duration):
         """
@@ -204,9 +216,17 @@ class AgentLabLogger:
         @param phase_name: 阶段名称
         @param duration: 持续时间（秒）
         """
-        msg = f"阶段 '{phase_name}' 完成，耗时: {duration:.2f} 秒"
+        # 如果有i18n实例，使用国际化格式
+        if hasattr(self, 'i18n'):
+            msg = self.i18n.format_completion(phase_name, duration)
+            translated = self.i18n.get(phase_name, phase_name)
+            log_msg = f"完成: {translated} (耗时: {duration:.2f}秒)"
+        else:
+            msg = f"阶段 '{phase_name}' 完成，耗时: {duration:.2f} 秒"
+            log_msg = f"完成: {phase_name} (耗时: {duration:.2f}秒)"
+        
         self.full_logger.info(msg)
-        self.phase_logger.info(f"完成: {phase_name} (耗时: {duration:.2f}秒)")
+        self.phase_logger.info(log_msg)
     
     def log_subtask_end(self, subtask_name, duration, steps=None):
         """
