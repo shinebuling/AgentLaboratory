@@ -1,6 +1,7 @@
 from utils import *
 from tools import *
 from inference import *
+from logger_manager import get_logger
 import random, string
 
 
@@ -258,7 +259,21 @@ class BaseAgent:
             f"[Objective] Your goal is to perform research on the following topic: {research_topic}\n"
             f"Feedback: {feedback}\nNotes: {notes_str}\nYour previous command was: {self.prev_comm}. Make sure your new output is very different.\nPlease produce a single command below:\n")
         model_resp = query_model(model_str=self.model, system_prompt=sys_prompt, prompt=prompt, temp=temp, openai_api_key=self.openai_api_key)
-        print("^"*50, phase, "^"*50)
+        
+        # 记录LLM交互到日志
+        logger = get_logger()
+        if logger:
+            logger.log_llm_interaction(
+                model=self.model,
+                phase=phase,
+                prompt=prompt,
+                response=model_resp,
+                step=step
+            )
+        
+        # 使用日志系统记录，移除重复的分隔符
+        if logger:
+            logger.debug(f"Agent响应 [{phase}] 步骤#{step}: {model_resp[:200]}...")
         model_resp = self.clean_text(model_resp)
         self.prev_comm = model_resp
         steps_exp = None

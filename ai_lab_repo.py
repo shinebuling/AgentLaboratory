@@ -4,9 +4,10 @@ from app import *
 from agents import *
 from copy import copy
 from pathlib import Path
-from datetime import date, datetime
 from common_imports import *
+from datetime import date, datetime
 from mlesolver import MLESolver
+from logger_manager import AgentLabLogger, set_logger
 import argparse, pickle, yaml, re
 
 GLOBAL_AGENTRXIV = None
@@ -104,6 +105,11 @@ class LaboratoryWorkflow:
         
         # 确保所有子目录存在
         self._ensure_directories_exist()
+        
+        # 初始化日志系统
+        self.logger = AgentLabLogger(log_dir=f"{self.lab_dir}/logs")
+        set_logger(self.logger)  # 设置全局日志实例
+        self.logger.info(f"✓ 日志系统已初始化")
 
     def create_experiment_directory(self):
         """创建基于时间戳的实验目录"""
@@ -179,12 +185,12 @@ class LaboratoryWorkflow:
         """
         for phase, subtasks in self.phases:
             phase_start_time = time.time()  # Start timing the phase
-            if self.verbose: print(f"{'*'*50}\nBeginning phase: {phase}\n{'*'*50}")
+            if self.verbose: self.logger.log_phase_start(phase)
             for subtask in subtasks:
                 if self.agentRxiv:
-                    if self.verbose: print(f"{'&' * 30}\n[Lab #{self.lab_index} Paper #{self.paper_index}] Beginning subtask: {subtask}\n{'&' * 30}")
+                    if self.verbose: self.logger.log_subtask_start(subtask, self.lab_index, self.paper_index)
                 else:
-                    if self.verbose: print(f"{'&'*30}\nBeginning subtask: {subtask}\n{'&'*30}")
+                    if self.verbose: self.logger.log_subtask_start(subtask)
                 if type(self.phase_models) == dict:
                     if subtask in self.phase_models:
                         self.set_model(self.phase_models[subtask])
@@ -237,7 +243,8 @@ class LaboratoryWorkflow:
                 # Calculate and print the duration of the phase
                 phase_end_time = time.time()
                 phase_duration = phase_end_time - phase_start_time
-                print(f"Subtask '{subtask}' completed in {phase_duration:.2f} seconds.")
+                steps = self.statistics_per_phase[subtask].get("steps", None)
+                self.logger.log_subtask_end(subtask, phase_duration, steps)
                 self.statistics_per_phase[subtask]["time"] = phase_duration
 
     def report_refinement(self):
@@ -266,7 +273,7 @@ class LaboratoryWorkflow:
                 raise Exception("Model did not respond")
             response = response.lower().strip()[0]
             if response == "n":
-                if self.verbose: print("*"*40, "\n", "REVIEW COMPLETE", "\n", "*"*40)
+                if self.verbose: self.logger.log_review_complete()
                 return False
             elif response == "y":
                 self.set_agent_attr("reviewer_response", f"Provided are reviews from a set of three reviewers: {reviews}.")
@@ -296,14 +303,16 @@ class LaboratoryWorkflow:
         if match: report_title = match.group(1).replace(" ", "_")
         else: report_title = "\n".join([str(random.randint(0, 10)) for _ in range(10)])
         if self.agentRxiv: shutil.copyfile(self.lab_dir + "/tex/temp.pdf", f"uploads/{report_title}.pdf")
-        if self.verbose: print(f"Report writing completed, reward function score: {score}")
+        if self.verbose: self.logger.log_reward_score("报告撰写", score)
         if self.human_in_loop_flag["report writing"]:
             retry = self.human_in_loop("report writing", report)
             if retry: return retry
         self.set_agent_attr("report", report)
         readme = self.professor.generate_readme()
         save_to_file(f"{self.lab_dir}/reports", "readme.md", readme)
+        self.logger.log_file_saved(f"{self.lab_dir}/reports/readme.md", "README文件")
         save_to_file(f"{self.lab_dir}/reports", "report.txt", report)
+        self.logger.log_file_saved(f"{self.lab_dir}/reports/report.txt", "研究报告")
         self.reset_agents()
         return False
 
@@ -316,14 +325,14 @@ class LaboratoryWorkflow:
         dialogue = str()
         # iterate until max num tries to complete task is exhausted
         for _i in range(max_tries):
-            print(f"@@ Lab #{self.lab_index} Paper #{self.paper_index} @@")
+            self.logger.log_experiment_info(self.lab_index, self.paper_index)
             resp = self.postdoc.inference(self.research_topic, "results interpretation", feedback=dialogue, step=_i)
-            if self.verbose: print("Postdoc: ", resp, "\n~~~~~~~~~~~")
+            if self.verbose: self.logger.log_agent_response("博士后", resp, "结果解读")
             dialogue = str()
             if "```DIALOGUE" in resp:
                 dialogue = extract_prompt(resp, "DIALOGUE")
                 dialogue = f"The following is dialogue produced by the postdoctoral researcher: {dialogue}"
-                if self.verbose: print("#"*40, "\n", "Postdoc Dialogue:", dialogue, "\n", "#"*40)
+                if self.verbose: self.logger.log_dialogue("博士后", dialogue, "结果解读")
             if "```INTERPRETATION" in resp:
                 interpretation = extract_prompt(resp, "INTERPRETATION")
                 if self.human_in_loop_flag["results interpretation"]:
@@ -335,12 +344,12 @@ class LaboratoryWorkflow:
                 self.statistics_per_phase["results interpretation"]["steps"] = _i
                 return False
             resp = self.phd.inference(self.research_topic, "results interpretation", feedback=dialogue, step=_i)
-            if self.verbose: print("PhD Student: ", resp, "\n~~~~~~~~~~~")
+            if self.verbose: self.logger.log_agent_response("博士生", resp, "结果解读")
             dialogue = str()
             if "```DIALOGUE" in resp:
                 dialogue = extract_prompt(resp, "DIALOGUE")
                 dialogue = f"The following is dialogue produced by the PhD student: {dialogue}"
-                if self.verbose: print("#"*40, "\n", "PhD Dialogue:", dialogue, "#"*40, "\n")
+                if self.verbose: self.logger.log_dialogue("博士生", dialogue, "结果解读")
         raise Exception("Max tries during phase: Results Interpretation")
 
     def running_experiments(self):
@@ -364,12 +373,14 @@ class LaboratoryWorkflow:
         #execute_code(code)
         score = solver.best_codes[0][1]
         exp_results = solver.best_codes[0][2]
-        if self.verbose: print(f"Running experiments completed, reward function score: {score}")
+        if self.verbose: self.logger.log_reward_score("运行实验", score)
         if self.human_in_loop_flag["running experiments"]:
             retry = self.human_in_loop("data preparation", code)
             if retry: return retry
         save_to_file(f"{self.lab_dir}/src", "run_experiments.py", code)
+        self.logger.log_file_saved(f"{self.lab_dir}/src/run_experiments.py", "实验代码")
         save_to_file(f"{self.lab_dir}/outputs", "experiment_output.log", exp_results)
+        self.logger.log_file_saved(f"{self.lab_dir}/outputs/experiment_output.log", "实验输出")
         self.set_agent_attr("results_code", code)
         self.set_agent_attr("exp_results", exp_results)
         # reset agent state
@@ -389,7 +400,7 @@ class LaboratoryWorkflow:
         hf_engine = HFDataSearch()
         # iterate until max num tries to complete task is exhausted
         for _i in range(max_tries):
-            print(f"@@ Lab #{self.lab_index} Paper #{self.paper_index} @@")
+            self.logger.log_experiment_info(self.lab_index, self.paper_index)
             if ml_feedback != "":
                 ml_feedback_in = "Feedback provided to the ML agent: " + ml_feedback
             else: ml_feedback_in = ""
@@ -399,11 +410,11 @@ class LaboratoryWorkflow:
             if "```DIALOGUE" in resp:
                 dialogue = extract_prompt(resp, "DIALOGUE")
                 swe_dialogue = f"\nThe following is dialogue produced by the SW Engineer: {dialogue}\n"
-                if self.verbose: print("#"*40, f"\nThe following is dialogue produced by the SW Engineer: {dialogue}", "\n", "#"*40)
+                if self.verbose: self.logger.log_dialogue("软件工程师", dialogue, "数据准备")
             if "```SUBMIT_CODE" in resp:
                 final_code = extract_prompt(resp, "SUBMIT_CODE")
                 code_resp = execute_code(final_code, timeout=60)
-                if self.verbose: print("!"*100, "\n", f"CODE RESPONSE: {code_resp}")
+                if self.verbose: self.logger.log_code_execution(final_code[:200], code_resp[:500])
                 swe_feedback += f"\nCode Response: {code_resp}\n"
                 if "[CODE EXECUTION ERROR]" in code_resp:
                     swe_feedback += "\nERROR: Final code had an error and could not be submitted! You must address and fix this error.\n"
@@ -412,6 +423,7 @@ class LaboratoryWorkflow:
                         retry = self.human_in_loop("data preparation", final_code)
                         if retry: return retry
                     save_to_file(f"{self.lab_dir}/src", "load_data.py", final_code)
+                    self.logger.log_file_saved(f"{self.lab_dir}/src/load_data.py", "数据加载代码")
                     self.set_agent_attr("dataset_code", final_code)
                     # reset agent state
                     self.reset_agents()
@@ -432,14 +444,14 @@ class LaboratoryWorkflow:
             if "```DIALOGUE" in resp:
                 dialogue = extract_prompt(resp, "DIALOGUE")
                 ml_dialogue = f"\nThe following is dialogue produced by the ML Engineer: {dialogue}\n"
-                if self.verbose: print("#" * 40, f"\nThe following is dialogue produced by the ML Engineer: {dialogue}", "#" * 40, "\n")
+                if self.verbose: self.logger.log_dialogue("机器学习工程师", dialogue, "数据准备")
             if "```python" in resp:
                 code = extract_prompt(resp, "python")
                 code = self.ml_engineer.dataset_code + "\n" + code
                 code_resp = execute_code(code, timeout=120)
                 ml_command = f"Code produced by the ML agent:\n{code}"
                 ml_feedback += f"\nCode Response: {code_resp}\n"
-                if self.verbose: print("!"*100, "\n", f"CODE RESPONSE: {code_resp}")
+                if self.verbose: self.logger.log_code_execution(code[:200], code_resp[:500])
             if "```SEARCH_HF" in resp:
                 hf_query = extract_prompt(resp, "SEARCH_HF")
                 hf_res = "\n".join(hf_engine.results_str(hf_engine.retrieve_ds(hf_query)))
@@ -456,10 +468,10 @@ class LaboratoryWorkflow:
         dialogue = str()
         # iterate until max num tries to complete task is exhausted
         for _i in range(max_tries):
-            print(f"@@ Lab #{self.lab_index} Paper #{self.paper_index} @@")
+            self.logger.log_experiment_info(self.lab_index, self.paper_index)
             # inference postdoc to
             resp = self.postdoc.inference(self.research_topic, "plan formulation", feedback=dialogue, step=_i)
-            if self.verbose: print("Postdoc: ", resp, "\n~~~~~~~~~~~")
+            if self.verbose: self.logger.log_agent_response("博士后", resp, "计划制定")
             dialogue = str()
 
             if "```DIALOGUE" in resp:
@@ -479,13 +491,13 @@ class LaboratoryWorkflow:
                 return False
 
             resp = self.phd.inference(self.research_topic, "plan formulation", feedback=dialogue, step=_i)
-            if self.verbose: print("PhD Student: ", resp, "\n~~~~~~~~~~~")
+            if self.verbose: self.logger.log_agent_response("博士生", resp, "计划制定")
 
             dialogue = str()
             if "```DIALOGUE" in resp:
                 dialogue = extract_prompt(resp, "DIALOGUE")
                 dialogue = f"The following is dialogue produced by the PhD student: {dialogue}"
-                if self.verbose: print("#"*40, "\n", "PhD Dialogue:", dialogue, "#"*40, "\n")
+                if self.verbose: self.logger.log_dialogue("博士生", dialogue, "计划制定")
         if self.except_if_fail:
             raise Exception("Max tries during phase: Plan Formulation")
         else:
@@ -507,10 +519,12 @@ class LaboratoryWorkflow:
         max_tries = self.max_steps # lit review often requires extra steps
         # get initial response from PhD agent
         resp = self.phd.inference(self.research_topic, "literature review", step=0, temp=0.4)
-        if self.verbose: print(resp, "\n~~~~~~~~~~~")
+        if self.verbose: 
+            self.logger.log_agent_response("博士生", resp, "文献综述")
+            self.logger.debug(f"文献综述 - 步骤 #0 响应预览: {resp[:300]}...")
         # iterate until max num tries to complete task is exhausted
         for _i in range(max_tries):
-            print(f"@@ Lab #{self.lab_index} Paper #{self.paper_index} @@")
+            self.logger.log_experiment_info(self.lab_index, self.paper_index)
             feedback = str()
             # grab summary of papers from arxiv
             if "```SUMMARY" in resp:
@@ -558,7 +572,9 @@ class LaboratoryWorkflow:
                 self.statistics_per_phase["literature review"]["steps"] = _i
                 return False
             resp = self.phd.inference(self.research_topic, "literature review", feedback=feedback, step=_i + 1, temp=0.4)
-            if self.verbose: print(resp, "\n~~~~~~~~~~~")
+            if self.verbose:
+                self.logger.log_agent_response("博士生", resp, "文献综述")
+                self.logger.debug(f"文献综述 - 步骤 #{_i+1} 响应: {resp[:300]}...")
         if self.except_if_fail: raise Exception("Max tries during phase: Literature Review")
         else:
             if len(self.phd.lit_review) >= self.num_papers_lit_review:
