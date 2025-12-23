@@ -13,9 +13,9 @@ gitee-api-key: "1NJHGJ7C6C3DL4HKVFQQ655TX0ARTHRUYGTW1TWQ"
 gitee-base-url: "https://ai.gitee.com/v1"
 
 # Agent Laboratory 后端模型（可选：deepseek-chat, DeepSeek-V3等）
-llm-backend: "DeepSeek-V3"
+llm-backend: "DeepSeek-R1"
 # 文献综述后端模型
-lit-review-backend: "DeepSeek-V3"
+lit-review-backend: "DeepSeek-R1"
 
 # 基础语言
 language: "Chinese"
