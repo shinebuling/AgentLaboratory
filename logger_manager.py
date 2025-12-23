@@ -30,6 +30,15 @@ class TeeOutput:
     def __getattr__(self, name):
         """代理其他属性到原始流"""
         return getattr(self.stream, name)
+    
+    def __getstate__(self):
+        """序列化时排除文件句柄"""
+        return {'stream': self.stream}
+    
+    def __setstate__(self, state):
+        """反序列化时恢复（文件句柄将在 AgentLabLogger 中重新设置）"""
+        self.__dict__.update(state)
+        self.file = None  # 临时设置为 None
 
 
 class AgentLabLogger:
@@ -310,6 +319,73 @@ class AgentLabLogger:
         separator = "*" * 40
         msg = f"\n{separator}\n审查完成\n{separator}"
         self.full_logger.info(msg)
+    
+    def __getstate__(self):
+        """
+        序列化时调用，排除不可序列化的文件句柄和日志对象
+        """
+        state = self.__dict__.copy()
+        # 移除不可序列化的对象
+        state.pop('full_log_file', None)
+        state.pop('original_stdout', None)
+        state.pop('original_stderr', None)
+        state.pop('full_logger', None)
+        state.pop('llm_logger', None)
+        state.pop('error_logger', None)
+        state.pop('phase_logger', None)
+        return state
+    
+    def __setstate__(self, state):
+        """
+        反序列化时调用，重新初始化文件句柄和日志对象
+        """
+        self.__dict__.update(state)
+        
+        # 重新打开文件和创建日志对象
+        log_dir = self.log_dir
+        
+        # 重新打开重定向文件
+        self.full_log_file = open(f"{log_dir}/full_execution.log", "a", encoding="utf-8")
+        
+        # 获取真正的原始流（防止重复嵌套 TeeOutput）
+        if isinstance(sys.stdout, TeeOutput):
+            self.original_stdout = sys.stdout.stream
+        else:
+            self.original_stdout = sys.stdout
+            
+        if isinstance(sys.stderr, TeeOutput):
+            self.original_stderr = sys.stderr.stream
+        else:
+            self.original_stderr = sys.stderr
+        
+        # 使用TeeOutput同时输出到终端和文件
+        sys.stdout = TeeOutput(self.full_log_file, self.original_stdout)
+        sys.stderr = TeeOutput(self.full_log_file, self.original_stderr)
+        
+        # 重新创建日志对象
+        self.full_logger = self._create_logger(
+            'full_execution',
+            f'{log_dir}/full_execution.log',
+            logging.DEBUG
+        )
+        
+        self.llm_logger = self._create_logger(
+            'llm_interactions',
+            f'{log_dir}/llm_interactions.log',
+            logging.INFO
+        )
+        
+        self.error_logger = self._create_logger(
+            'errors',
+            f'{log_dir}/errors.log',
+            logging.WARNING
+        )
+        
+        self.phase_logger = self._create_logger(
+            'phases',
+            f'{log_dir}/phases.log',
+            logging.INFO
+        )
     
     def close(self):
         """关闭所有日志处理器"""
