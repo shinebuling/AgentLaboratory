@@ -16,7 +16,7 @@ experiments/
 .DS_Store
 state_saves/*
 __pycache__/*
-Figure*.png
+*.png
 testrun.py
 
 # Data folders
@@ -26,9 +26,11 @@ data/
 uploads/
 *.json
 
+
 # Experiment results
 experiments/
 state_saves/
+experiment_configs/
 
 # Python cache
 *.pyc
@@ -40,3 +42,4 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+AgentLaboratory.code-workspace_gradio.code-workspace
