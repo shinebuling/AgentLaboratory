@@ -165,11 +165,17 @@ class AgentLabLogger:
         self.llm_logger.info(f"{separator}")
         
         # 记录提示词（截断过长的内容）
-        prompt_preview = prompt[:1000] + "..." if len(prompt) > 1000 else prompt
+        if prompt is None:
+            prompt_preview = "[None]"
+        else:
+            prompt_preview = prompt[:1000] + "..." if len(prompt) > 1000 else prompt
         self.llm_logger.info(f"提示词:\n{prompt_preview}")
         
         # 记录响应（截断过长的内容）
-        response_preview = response[:1000] + "..." if len(response) > 1000 else response
+        if response is None:
+            response_preview = "[None]"
+        else:
+            response_preview = response[:1000] + "..." if len(response) > 1000 else response
         self.llm_logger.info(f"\n响应:\n{response_preview}")
         self.llm_logger.info(f"{separator}\n")
         
