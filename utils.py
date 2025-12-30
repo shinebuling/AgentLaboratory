@@ -190,7 +190,7 @@ def save_to_file(location, filename, data):
     """Utility function to save data as plain text."""
     filepath = os.path.join(location, filename)
     try:
-        with open(filepath, 'w') as f:
+        with open(filepath, 'w', encoding='utf-8') as f:
             f.write(data)  # Write the raw string instead of using json.dump
         print(f"Data successfully saved to {filepath}")
     except Exception as e:
