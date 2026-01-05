@@ -1,5 +1,5 @@
 """
-Gradio前端界面 - Agent Laboratory (解耦版本)
+Gradio前端界面 - Agent Laboratory 
 只负责配置收集和结果展示，通过调用原有命令行工具来执行实验
 """
 
@@ -334,9 +334,7 @@ def create_gradio_interface():
                         gr.Markdown("""
                         1. **输入研究主题**: 详细描述你的研究问题
                         2. **选择模型**: 推荐使用DeepSeek-V3
-                        3. **配置API密钥**: 
-                           - DeepSeek模型 → 输入Gitee AI密钥
-                           - OpenAI模型 → 输入OpenAI密钥
+                        3. **配置API密钥**: 配置你的密钥
                         4. **调整参数**: 根据需要设置论文数量和步数
                         5. **启动实验**: 点击按钮开始
                         
