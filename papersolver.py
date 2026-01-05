@@ -347,6 +347,9 @@ class PaperSolver:
                     search_query = query_model(model_str=f"{self.llm_str}", prompt=f"Given the following research topic {self.topic} and research plan: \n\n{self.plan}\n\nPlease come up with a search query to find relevant papers on arXiv. Respond only with the search query and nothing else. This should be a a string that will be used to find papers with semantically similar content. {att_str}", system_prompt=f"You are a research paper finder. You must find papers for the section {_section}. Query must be text nothing else.", openai_api_key=self.openai_api_key)
                     search_query.replace('"', '')
                     papers = arx.find_papers_by_str(query=search_query, N=10)
+                    # Handle case where find_papers_by_str returns None
+                    if papers is None:
+                        papers = str()
                     first_attempt = False
                     attempts += 1
                 if len(papers) != 0:
