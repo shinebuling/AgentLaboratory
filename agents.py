@@ -35,6 +35,16 @@ def extract_json_between_markers(llm_output):
 
 
 def get_score(outlined_plan, latex, reward_model_llm, reviewer_type=None, attempts=3, openai_api_key=None):
+    # 如果是DeepSeek模型，需要设置Gitee AI环境变量
+    if reward_model_llm in ["DeepSeek-V3", "deepseek-v3", "DeepSeek-R1", "deepseek-r1", "deepseek-chat"]:
+        if openai_api_key:
+            # 强制设置，覆盖可能存在的旧值
+            os.environ['GITEE_API_KEY'] = openai_api_key
+            os.environ['GITEE_BASE_URL'] = 'https://ai.gitee.com/v1'
+            # 清除可能的OpenAI API key，避免混淆
+            if 'OPENAI_API_KEY' in os.environ and os.environ['OPENAI_API_KEY'] == openai_api_key:
+                del os.environ['OPENAI_API_KEY']
+    
     e = str()
     for _attempt in range(attempts):
         try:
