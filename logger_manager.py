@@ -97,6 +97,45 @@ class AgentLabLogger:
         self.current_phase = None
         self.phase_start_time = None
     
+    def __getstate__(self):
+        """序列化时保存必要信息"""
+        state = self.__dict__.copy()
+        # 移除不可序列化的对象
+        state['full_log_file'] = None
+        state['original_stdout'] = None
+        state['original_stderr'] = None
+        # 保留日志目录路径用于恢复
+        return state
+    
+    def __setstate__(self, state):
+        """反序列化后重新初始化日志系统"""
+        self.__dict__.update(state)
+        
+        # 重新打开日志文件（追加模式）
+        self.full_log_file = open(f"{self.log_dir}/full_execution.log", "a", encoding="utf-8")
+        
+        # 恢复stdout和stderr的原始流
+        if isinstance(sys.stdout, TeeOutput):
+            self.original_stdout = sys.stdout.stream
+        else:
+            self.original_stdout = sys.stdout
+            
+        if isinstance(sys.stderr, TeeOutput):
+            self.original_stderr = sys.stderr.stream
+        else:
+            self.original_stderr = sys.stderr
+        
+        # 重新设置TeeOutput，连接到新的文件句柄
+        if isinstance(sys.stdout, TeeOutput):
+            sys.stdout.file = self.full_log_file
+        else:
+            sys.stdout = TeeOutput(self.full_log_file, self.original_stdout)
+            
+        if isinstance(sys.stderr, TeeOutput):
+            sys.stderr.file = self.full_log_file
+        else:
+            sys.stderr = TeeOutput(self.full_log_file, self.original_stderr)
+    
     def _create_logger(self, name, filename, level):
         """
         创建单个logger
