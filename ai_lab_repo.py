@@ -118,7 +118,52 @@ class LaboratoryWorkflow:
         self.logger.i18n = self.i18n  # 传递i18n实例给logger
         set_logger(self.logger)  # 设置全局日志实例
         self.logger.info(f"✓ 日志系统已初始化")
+        
+        # 提取研究主题关键词用于一致性检查
+        self.topic_keywords = self._extract_topic_keywords(research_topic)
+        self.topic_deviation_warnings = 0  # 主题偏离警告计数
+        self.max_topic_warnings = 2  # 最大允许的警告次数
 
+    def _extract_topic_keywords(self, topic):
+        """从研究主题中提取关键词"""
+        # 简单的关键词提取：去除常见词汇，保留重要术语
+        stop_words = {'的', '是', '在', '和', '与', '对', '进行', '研究', '分析', '探索', 
+                      'the', 'is', 'in', 'and', 'with', 'to', 'of', 'for', 'on', 'a', 'an',
+                      '基于', '实现', '应用', '系统', '方法', '技术', '通过'}
+        
+        # 对中英文混合文本进行更好的分词
+        # 分离中文和英文
+        import jieba
+        words = []
+        
+        # 使用jieba对中文分词
+        try:
+            jieba.setLogLevel(jieba.logging.INFO)  # 减少jieba输出
+            chinese_words = jieba.cut(topic)
+            words.extend([w.lower() for w in chinese_words if len(w.strip()) > 1])
+        except:
+            # 如果jieba不可用，使用简单的字符匹配
+            # 提取连续的英文单词
+            english_words = re.findall(r'[a-zA-Z]+', topic)
+            words.extend([w.lower() for w in english_words if len(w) > 2])
+            # 提取中文词组（2-4个字符）
+            chinese_chars = re.findall(r'[\u4e00-\u9fff]+', topic)
+            for chars in chinese_chars:
+                # 简单的2字词切分
+                for i in range(len(chars) - 1):
+                    words.append(chars[i:i+2])
+        
+        # 过滤停用词和短词
+        keywords = [w for w in words if w not in stop_words and len(w) > 1]
+        # 去重并保留前15个
+        seen = set()
+        unique_keywords = []
+        for k in keywords:
+            if k not in seen:
+                seen.add(k)
+                unique_keywords.append(k)
+        return unique_keywords[:15]  # 保留前15个关键词
+    
     def create_experiment_directory(self):
         """创建基于时间戳的实验目录"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -146,6 +191,98 @@ class LaboratoryWorkflow:
         print(f"✓ 实验目录已创建: {self.lab_dir}")
 
 
+    def check_topic_consistency(self, current_work_description, phase_name):
+        """
+        检查当前工作是否与原始研究主题一致
+        @param current_work_description: 当前工作内容描述（代码、数据集等）
+        @param phase_name: 当前阶段名称
+        @return: (bool) 是否一致
+        """
+        # 简单的关键词匹配检查
+        current_keywords = self._extract_topic_keywords(current_work_description)
+        
+        # 计算关键词重叠度
+        overlap = len(set(self.topic_keywords) & set(current_keywords))
+        overlap_ratio = overlap / max(len(self.topic_keywords), 1)
+        
+        # 使用LLM进行更深度的一致性检查
+        consistency_prompt = f"""请判断以下实际工作内容是否与原始研究主题相关：
+
+原始研究主题：{self.research_topic}
+原始主题关键词：{', '.join(self.topic_keywords)}
+
+当前阶段：{phase_name}
+当前工作内容：{current_work_description[:1000]}
+当前内容关键词：{', '.join(current_keywords)}
+
+请回答：
+1. 当前工作是否与原始主题高度相关？（是/否）
+2. 如果不相关，简要说明偏离原因（1-2句话）
+
+只需回答"是"或"否"，如果否，简要说明原因。"""
+        
+        try:
+            from inference import query_model
+            response = query_model(
+                model_str=self.model_backbone,
+                prompt=consistency_prompt,
+                system_prompt="你是一个研究主题一致性评估专家。请严格判断实际工作是否与原始研究主题相关。",
+                openai_api_key=self.openai_api_key,
+                temp=0.3,
+                print_cost=False
+            )
+            
+            # 判断响应
+            response_lower = response.lower()
+            is_consistent = '是' in response or 'yes' in response_lower or 'consistent' in response_lower
+            
+            if not is_consistent:
+                self.topic_deviation_warnings += 1
+                warning_msg = f"""\n{'='*80}
+⚠️  主题偏离警告 #{self.topic_deviation_warnings}/{self.max_topic_warnings}
+{'='*80}
+原始主题：{self.research_topic}
+当前阶段：{phase_name}
+偏离原因：{response}
+关键词重叠度：{overlap_ratio:.1%}
+{'='*80}\n"""
+                self.logger.warning(warning_msg)
+                print(warning_msg)
+                
+                # 如果超过警告阈值，强制停止实验
+                if self.topic_deviation_warnings >= self.max_topic_warnings:
+                    error_msg = f"""\n{'='*80}
+❌ 实验已中止：主题严重偏离
+{'='*80}
+原始主题：{self.research_topic}
+原始关键词：{', '.join(self.topic_keywords)}
+当前工作：{current_work_description[:200]}...
+当前关键词：{', '.join(current_keywords)}
+
+实验已经{self.topic_deviation_warnings}次偏离原始主题。
+为避免浪费计算资源，系统已自动中止此实验。
+
+建议：
+1. 检查数据集选择是否合理
+2. 确认实验设计与研究目标一致
+3. 如需继续，请重新规划实验方案
+{'='*80}\n"""
+                    self.logger.error(error_msg)
+                    raise Exception("实验主题严重偏离，已自动中止")
+            else:
+                self.logger.info(f"✓ 主题一致性检查通过（{phase_name}）- 关键词重叠度: {overlap_ratio:.1%}")
+            
+            return is_consistent
+            
+        except Exception as e:
+            # 如果LLM调用失败，回退到关键词匹配
+            self.logger.warning(f"主题一致性检查失败（使用关键词匹配）: {str(e)}")
+            if overlap_ratio < 0.15:  # 关键词重叠度低于15%视为偏离
+                self.topic_deviation_warnings += 1
+                if self.topic_deviation_warnings >= self.max_topic_warnings:
+                    raise Exception(f"实验主题严重偏离（关键词重叠仅{overlap_ratio:.1%}），已自动中止")
+            return overlap_ratio >= 0.15
+    
     def set_model(self, model):
         self.set_agent_attr("model", model)
         self.reviewers.model = model
@@ -389,6 +526,17 @@ class LaboratoryWorkflow:
         self.logger.log_file_saved(f"{self.lab_dir}/src/run_experiments.py", "实验代码")
         save_to_file(f"{self.lab_dir}/outputs", "experiment_output.log", exp_results)
         self.logger.log_file_saved(f"{self.lab_dir}/outputs/experiment_output.log", "实验输出")
+        
+        # 主题一致性检查：验证实验代码是否与研究主题相关
+        try:
+            self.check_topic_consistency(
+                current_work_description=f"实验代码：\n{code}\n\n实验结果：{exp_results[:500]}",
+                phase_name="运行实验 (Running Experiments)"
+            )
+        except Exception as e:
+            self.logger.error(f"主题一致性检查失败，实验中止: {str(e)}")
+            raise e
+        
         self.set_agent_attr("results_code", code)
         self.set_agent_attr("exp_results", exp_results)
         # reset agent state
@@ -433,6 +581,17 @@ class LaboratoryWorkflow:
                     save_to_file(f"{self.lab_dir}/src", "load_data.py", final_code)
                     self.logger.log_file_saved(f"{self.lab_dir}/src/load_data.py", "数据加载代码")
                     self.set_agent_attr("dataset_code", final_code)
+                    
+                    # 主题一致性检查：验证数据准备代码是否与研究主题相关
+                    try:
+                        self.check_topic_consistency(
+                            current_work_description=f"数据准备代码：\n{final_code}\n\n代码响应：{code_resp}",
+                            phase_name="数据准备 (Data Preparation)"
+                        )
+                    except Exception as e:
+                        self.logger.error(f"主题一致性检查失败，实验中止: {str(e)}")
+                        raise e
+                    
                     # reset agent state
                     self.reset_agents()
                     self.statistics_per_phase["data preparation"]["steps"] = _i
