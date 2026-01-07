@@ -135,7 +135,7 @@ def compile_latex(latex_code, output_path, compile=True, timeout=30):
     dir_path = f"{output_path}/tex"
     tex_file_path = os.path.join(dir_path, "temp.tex")
     # Write the LaTeX code to the .tex file in the specified directory
-    with open(tex_file_path, "w") as f:
+    with open(tex_file_path, "w", encoding='utf-8') as f:
         f.write(latex_code)
 
     if not compile:
@@ -153,7 +153,15 @@ def compile_latex(latex_code, output_path, compile=True, timeout=30):
         )
 
         # If compilation is successful, return the success message
-        return f"Compilation successful: {result.stdout.decode('utf-8')}"
+        # Try multiple encodings to handle different system outputs
+        try:
+            output = result.stdout.decode('utf-8')
+        except UnicodeDecodeError:
+            try:
+                output = result.stdout.decode('gbk')
+            except UnicodeDecodeError:
+                output = result.stdout.decode('utf-8', errors='replace')
+        return f"Compilation successful: {output}"
 
     except subprocess.TimeoutExpired:
         # If the compilation takes too long, return a timeout message
